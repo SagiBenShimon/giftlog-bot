@@ -706,6 +706,23 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("בחר פעולה:", reply_markup=menu_kb())
 
 
+# ---------- KEEP ALIVE ----------
+from threading import Thread
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, *args):
+        pass
+
+def keep_alive():
+    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+
+Thread(target=keep_alive, daemon=True).start()
+
 # ---------- RUN ----------
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CallbackQueryHandler(cb))

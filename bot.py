@@ -189,6 +189,9 @@ def date_input_kb(back_cb):
 # ---------- EXCEL ----------
 async def handle_excel(update):
     file = await update.message.document.get_file()
+    import os as _os
+    if _os.path.exists("temp.xlsx"):
+        _os.remove("temp.xlsx")
     await file.download_to_drive("temp.xlsx")
     df = pd.read_excel("temp.xlsx")
     count = 0
@@ -497,7 +500,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*C* — סוג אירוע (לא חובה, ברירת מחדל: חתונה)\n"
             "*D* — סוג קרבה (לא חובה, ברירת מחדל: לא הוזן ערך)\n"
             "*E* — תאריך (לא חובה, פורמטים: DD/MM/YYYY או DD-MM-YYYY או YYYY-MM-DD, ריק = היום הנוכחי)\n\n"
-            "⚠️ השורה הראשונה = כותרות, לא תיטען\n"
+            "⚠️ שורת הכותרות (שם, סכום וכו') תדולג אוטומטית\n"
             "⚠️ רשומה ללא שם או סכום תדולג",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 תפריט", callback_data="main")]])

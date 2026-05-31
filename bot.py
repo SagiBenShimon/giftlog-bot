@@ -33,7 +33,7 @@ def _sb_get():
     return rows
 
 def _sb_upsert(value_str):
-    payload = _json.dumps({"id": 1, "value": value_str}).encode()
+    payload = _json.dumps({"ID": 1, "value": value_str}).encode()
     r = _req.Request(
         f"{SUPABASE_URL}/rest/v1/botdata",
         data=payload,

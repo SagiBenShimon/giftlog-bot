@@ -190,17 +190,19 @@ def date_input_kb(back_cb):
 async def handle_excel(update):
     file = await update.message.document.get_file()
     await file.download_to_drive("temp.xlsx")
-    df = pd.read_excel("temp.xlsx").iloc[1:]
+    df = pd.read_excel("temp.xlsx")
+    await update.message.reply_text(f"debug: {len(df)} שורות, עמודות: {list(df.columns)}")
+    df = df.iloc[1:]
     count = 0
     for i, row in df.iterrows():
+        await update.message.reply_text(f"debug שורה {i}: {list(row)}")
         try:
             name   = str(row.iloc[0]).strip()
             if not name or name.lower() == "nan":
-                print(f"שורה {i}: שם ריק, מדלג")
                 continue
             amount = int(float(str(row.iloc[1]).replace(",", "").strip()))
         except Exception as e:
-            print(f"שורה {i}: שגיאה בשם/סכום — {e}, ערכים: {list(row)}")
+            await update.message.reply_text(f"שגיאה שורה {i}: {e}")
             continue
         event    = str(row.iloc[2]).strip() if len(row) > 2 and not pd.isna(row.iloc[2]) else "חתונה"
         relation = str(row.iloc[3]).strip() if len(row) > 3 and not pd.isna(row.iloc[3]) else "לא הוזן ערך"

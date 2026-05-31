@@ -70,6 +70,15 @@ def reset(user_id):
 def today():
     return datetime.now().strftime("%Y-%m-%d")
 
+def parse_date(text):
+    """Try multiple date formats and return YYYY-MM-DD"""
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text.strip(), fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return text  # return as-is if nothing matched
+
 # ---------- DYNAMIC LISTS ----------
 BASE_EVENTS    = ["חתונה", "ברית", "יום הולדת"]
 BASE_AMOUNTS   = [450, 500, 600, 700, 800, 1000]
@@ -191,7 +200,7 @@ async def handle_excel(update):
             continue
         event    = str(row.iloc[2]).strip() if len(row) > 2 and not pd.isna(row.iloc[2]) else "חתונה"
         relation = str(row.iloc[3]).strip() if len(row) > 3 and not pd.isna(row.iloc[3]) else "לא הוזן ערך"
-        date     = str(row.iloc[4]).strip() if len(row) > 4 and not pd.isna(row.iloc[4]) else today()
+        date     = parse_date(str(row.iloc[4])) if len(row) > 4 and not pd.isna(row.iloc[4]) else today()
         add_custom_event(event)
         add_custom_relation(relation)
         data["received"].append(new_record(name, amount, event, relation, date))
@@ -478,7 +487,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*B* — סכום בשח (חובה, מספר בלבד)\n"
             "*C* — סוג אירוע (לא חובה, ברירת מחדל: חתונה)\n"
             "*D* — סוג קרבה (לא חובה, ברירת מחדל: לא הוזן ערך)\n"
-            "*E* — תאריך (לא חובה, פורמט: YYYY\-MM\-DD, ברירת מחדל: היום)\n\n"
+            "*E* — תאריך (לא חובה, פורמטים: DD/MM/YYYY או DD-MM-YYYY או YYYY-MM-DD, ריק = היום הנוכחי)\n\n"
             "⚠️ השורה הראשונה = כותרות, לא תיטען\n"
             "⚠️ רשומה ללא שם או סכום תדולג",
             parse_mode="Markdown",
@@ -657,7 +666,7 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state["mode"] == "date":
         if text:
             try:
-                date = datetime.strptime(text, "%d-%m-%Y").strftime("%Y-%m-%d")
+                date = parse_date(text)
             except ValueError:
                 await update.message.reply_text("⚠️ פורמט שגוי. נסה שוב DD-MM-YYYY:")
                 return
@@ -723,7 +732,7 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if state["mode"] == "edit_date_input":
         if text:
             try:
-                date = datetime.strptime(text, "%d-%m-%Y").strftime("%Y-%m-%d")
+                date = parse_date(text)
             except ValueError:
                 await update.message.reply_text("⚠️ פורמט שגוי, נסה שוב DD-MM-YYYY:")
                 return

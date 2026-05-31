@@ -472,8 +472,18 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # EXCEL
     # ════════════════════════════════════════
     if d == "excel":
-        await q.message.reply_text("שלח קובץ Excel:",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 תפריט", callback_data="main")]]))
+        await q.message.reply_text(
+            "📊 שלח קובץ Excel עם העמודות הבאות:\n\n"
+            "*A* — שם מלא (חובה)\n"
+            "*B* — סכום בשח (חובה, מספר בלבד)\n"
+            "*C* — סוג אירוע (לא חובה, ברירת מחדל: חתונה)\n"
+            "*D* — סוג קרבה (לא חובה, ברירת מחדל: לא הוזן ערך)\n"
+            "*E* — תאריך (לא חובה, פורמט: YYYY\-MM\-DD, ברירת מחדל: היום)\n\n"
+            "⚠️ השורה הראשונה = כותרות, לא תיטען\n"
+            "⚠️ רשומה ללא שם או סכום תדולג",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 תפריט", callback_data="main")]])
+        )
         return
 
     # ════════════════════════════════════════

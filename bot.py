@@ -14,11 +14,14 @@ TOKEN     = os.getenv("BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 # ---------- MONGODB ----------
-client = MongoClient(
-    MONGO_URL,
-    tls=True,
-    tlsAllowInvalidCertificates=True
-)
+import ssl
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+
+client = MongoClient(MONGO_URL, ssl_context=ctx)
 db = client["giftlog"]
 
 def _load_data():

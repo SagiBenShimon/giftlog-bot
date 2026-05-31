@@ -1,5 +1,4 @@
 import os
-import json
 import uuid
 import pandas as pd
 from datetime import datetime
@@ -7,24 +6,28 @@ from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from pymongo import MongoClient
 
 # ---------- CONFIG ----------
 load_dotenv("botX.env")
-TOKEN = os.getenv("BOT_TOKEN")
-FILE = "data.json"
+TOKEN     = os.getenv("BOT_TOKEN")
+MONGO_URL = os.getenv("MONGO_URL")
 
-# ---------- STORAGE ----------
-def load():
-    if os.path.exists(FILE):
-        with open(FILE, encoding="utf-8") as f:
-            return json.load(f)
+# ---------- MONGODB ----------
+client = MongoClient(MONGO_URL)
+db     = client["giftlog"]
+
+def _load_data():
+    doc = db.store.find_one({"_id": "main"})
+    if doc:
+        doc.pop("_id", None)
+        return doc
     return {"received": [], "given": [], "custom_events": [], "custom_relations": []}
 
 def save():
-    with open(FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    db.store.replace_one({"_id": "main"}, {"_id": "main", **data}, upsert=True)
 
-data = load()
+data = _load_data()
 
 # ---------- STATE ----------
 states = {}  # user_id -> {"mode": ..., "ctx": ...}

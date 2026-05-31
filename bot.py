@@ -6,33 +6,53 @@ from datetime import datetime
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from pymongo import MongoClient
+
 
 # ---------- CONFIG ----------
 load_dotenv("botX.env")
 TOKEN     = os.getenv("BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
-# ---------- MONGODB ----------
-import ssl
-ctx = ssl.create_default_context()
-ctx.check_hostname = False
-ctx.verify_mode = ssl.CERT_NONE
-ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+# ---------- SUPABASE ----------
+import json as _json
+import urllib.request as _req
 
-client = MongoClient(MONGO_URL, ssl_context=ctx)
-db = client["giftlog"]
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+_HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
+
+def _sb_get():
+    url = f"{SUPABASE_URL}/rest/v1/botdata?id=eq.1&select=value"
+    r = _req.urlopen(_req.Request(url, headers=_HEADERS))
+    rows = _json.loads(r.read())
+    return rows
+
+def _sb_upsert(value_str):
+    payload = _json.dumps({"id": 1, "value": value_str}).encode()
+    r = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/botdata",
+        data=payload,
+        headers={**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
+        method="POST"
+    )
+    _req.urlopen(r)
 
 def _load_data():
-    doc = db.store.find_one({"_id": "main"})
-    if doc:
-        doc.pop("_id", None)
-        return doc
+    try:
+        rows = _sb_get()
+        if rows:
+            return _json.loads(rows[0]["value"])
+    except:
+        pass
     return {"received": [], "given": [], "custom_events": [], "custom_relations": []}
 
 def save():
-    db.store.replace_one({"_id": "main"}, {"_id": "main", **data}, upsert=True)
+    _sb_upsert(_json.dumps(data, ensure_ascii=False))
 
 data = _load_data()
 

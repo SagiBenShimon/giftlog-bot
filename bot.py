@@ -779,7 +779,11 @@ class Handler(BaseHTTPRequestHandler):
 def keep_alive():
     HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
 
-Thread(target=keep_alive, daemon=True).start()
+# Start keep-alive server and wait for it to bind
+import time
+t = Thread(target=keep_alive, daemon=True)
+t.start()
+time.sleep(2)  # give server time to bind to port
 
 # ---------- RUN ----------
 app = ApplicationBuilder().token(TOKEN).build()

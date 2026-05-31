@@ -14,8 +14,12 @@ TOKEN     = os.getenv("BOT_TOKEN")
 MONGO_URL = os.getenv("MONGO_URL")
 
 # ---------- MONGODB ----------
-client = MongoClient(MONGO_URL)
-db     = client["giftlog"]
+client = MongoClient(
+    MONGO_URL,
+    tls=True,
+    tlsAllowInvalidCertificates=True
+)
+db = client["giftlog"]
 
 def _load_data():
     doc = db.store.find_one({"_id": "main"})

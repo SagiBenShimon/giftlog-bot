@@ -207,12 +207,15 @@ async def handle_excel(update):
         event    = str(row.iloc[2]).strip() if len(row) > 2 and not pd.isna(row.iloc[2]) else "חתונה"
         relation = str(row.iloc[3]).strip() if len(row) > 3 and not pd.isna(row.iloc[3]) else "לא הוזן ערך"
         raw_date = row.iloc[4] if len(row) > 4 else None
-        if raw_date is None or (isinstance(raw_date, float) and pd.isna(raw_date)):
+        try:
+            if raw_date is None or pd.isna(raw_date):
+                date = today()
+            elif hasattr(raw_date, "strftime"):
+                date = raw_date.strftime("%Y-%m-%d")
+            else:
+                date = parse_date(str(raw_date).split(" ")[0])
+        except:
             date = today()
-        elif hasattr(raw_date, "strftime"):
-            date = raw_date.strftime("%Y-%m-%d")
-        else:
-            date = parse_date(str(raw_date).split(" ")[0])
         add_custom_event(event)
         add_custom_relation(relation)
         data["received"].append(new_record(name, amount, event, relation, date))

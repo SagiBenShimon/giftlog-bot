@@ -192,11 +192,15 @@ async def handle_excel(update):
     await file.download_to_drive("temp.xlsx")
     df = pd.read_excel("temp.xlsx").iloc[1:]
     count = 0
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
         try:
             name   = str(row.iloc[0]).strip()
-            amount = int(row.iloc[1])
-        except:
+            if not name or name.lower() == "nan":
+                print(f"שורה {i}: שם ריק, מדלג")
+                continue
+            amount = int(float(str(row.iloc[1]).replace(",", "").strip()))
+        except Exception as e:
+            print(f"שורה {i}: שגיאה בשם/סכום — {e}, ערכים: {list(row)}")
             continue
         event    = str(row.iloc[2]).strip() if len(row) > 2 and not pd.isna(row.iloc[2]) else "חתונה"
         relation = str(row.iloc[3]).strip() if len(row) > 3 and not pd.isna(row.iloc[3]) else "לא הוזן ערך"

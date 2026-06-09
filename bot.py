@@ -33,7 +33,7 @@ def _sb_get():
     return rows
 
 def _sb_upsert(value_str):
-    payload = _json.dumps({"ID": 1, "value": value_str}).encode()
+    payload = _json.dumps({"id": 1, "value": value_str}).encode()  # ✅ תוקן: "ID" -> "id"
     r = _req.Request(
         f"{SUPABASE_URL}/rest/v1/botdata",
         data=payload,
@@ -47,8 +47,9 @@ def _load_data():
         rows = _sb_get()
         if rows:
             return _json.loads(rows[0]["value"])
-    except:
-        pass
+        print("⚠️ Supabase: טבלה ריקה")
+    except Exception as e:
+        print(f"❌ שגיאת Supabase: {e}")  # ✅ תוקן: שגיאות לא נבלעות בשקט
     return {"received": [], "given": [], "custom_events": [], "custom_relations": []}
 
 def save():

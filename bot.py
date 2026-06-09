@@ -27,33 +27,44 @@ _HEADERS = {
 }
 
 def _sb_get():
-    url = f"{SUPABASE_URL}/rest/v1/botdata?id=eq.1&select=value"
+    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"  # ✅ ID גדול
     r = _req.urlopen(_req.Request(url, headers=_HEADERS))
     rows = _json.loads(r.read())
     return rows
 
 def _sb_upsert(value_str):
-    payload = _json.dumps({"id": 1, "value": value_str}).encode()  # ✅ תוקן: "ID" -> "id"
-    r = _req.Request(
+    payload = _json.dumps({"ID": 1, "value": value_str}).encode()  # ✅ ID גדול
+    req = _req.Request(
         f"{SUPABASE_URL}/rest/v1/botdata",
         data=payload,
         headers={**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
         method="POST"
     )
-    _req.urlopen(r)
+    try:
+        _req.urlopen(req)
+        print("✅ Supabase: נשמר בהצלחה")
+    except Exception as e:
+        print(f"❌ upsert נכשל: {e}")
+        if hasattr(e, 'read'):
+            print(f"❌ תגובת Supabase: {e.read().decode()}")
+        raise
 
 def _load_data():
     try:
         rows = _sb_get()
         if rows:
+            print("✅ Supabase: נטענו נתונים בהצלחה")
             return _json.loads(rows[0]["value"])
-        print("⚠️ Supabase: טבלה ריקה")
+        print("⚠️ Supabase: טבלה ריקה, מתחיל מחדש")
     except Exception as e:
-        print(f"❌ שגיאת Supabase: {e}")  # ✅ תוקן: שגיאות לא נבלעות בשקט
+        print(f"❌ שגיאת טעינה מ-Supabase: {e}")
     return {"received": [], "given": [], "custom_events": [], "custom_relations": []}
 
 def save():
-    _sb_upsert(_json.dumps(data, ensure_ascii=False))
+    try:
+        _sb_upsert(_json.dumps(data, ensure_ascii=False))
+    except Exception as e:
+        print(f"❌ save() נכשל: {e}")
 
 data = _load_data()
 
@@ -558,7 +569,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=relations_multi_kb("search", []))
         return
 
-    # fallback — relation multi-select  (prefix frel_ is unique)
+    # fallback — relation multi-select
     if d.startswith("frel_") and d != "frel_confirm":
         rel = d[len("frel_"):]
         sel = state["ctx"].setdefault("frel_selected", [])
@@ -574,7 +585,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("בחר אירוע:", reply_markup=events_kb("fallback_search"))
         return
 
-    # fallback — event pick (reuses ev_ prefix, guarded by mode)
+    # fallback — event pick
     if d.startswith("ev_") and state["mode"] == "fall_event":
         if d == "ev_other":
             state["mode"] = "fall_event_custom"
@@ -597,7 +608,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=dates_multi_kb("fallback_search", [], fdates))
         return
 
-    # fallback — date multi-select  (prefix fdate_ is unique)
+    # fallback — date multi-select
     if d.startswith("fdate_") and d != "fdate_confirm":
         date_val = d[len("fdate_"):]
         sel = state["ctx"].setdefault("fdate_selected", [])
@@ -786,11 +797,10 @@ class Handler(BaseHTTPRequestHandler):
 def keep_alive():
     HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
 
-# Start keep-alive server and wait for it to bind
 import time
 t = Thread(target=keep_alive, daemon=True)
 t.start()
-time.sleep(2)  # give server time to bind to port
+time.sleep(2)
 
 # ---------- RUN ----------
 app = ApplicationBuilder().token(TOKEN).build()

@@ -33,6 +33,8 @@ def _sb_get():
     return rows
 
 def _sb_upsert(value_str):
+    print(f"🔍 URL: {SUPABASE_URL}")
+    print(f"🔍 KEY: {SUPABASE_KEY[:20] if SUPABASE_KEY else None}")
     payload = _json.dumps({"value": value_str}).encode()
     req = _req.Request(
         f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",

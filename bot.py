@@ -16,6 +16,7 @@ MONGO_URL = os.getenv("MONGO_URL")
 # ---------- SUPABASE ----------
 import json as _json
 import urllib.request as _req
+import urllib.parse as _parse
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -26,47 +27,123 @@ _HEADERS = {
     "Prefer": "return=representation"
 }
 
-def _sb_get():
-    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"
-    r = _req.urlopen(_req.Request(url, headers=_HEADERS))
-    rows = _json.loads(r.read())
-    return rows
-
-def _sb_upsert(value_str):
-    print(f"🔍 URL: {SUPABASE_URL}")
-    print(f"🔍 KEY: {SUPABASE_KEY[:20] if SUPABASE_KEY else None}")
-    payload = _json.dumps({"value": value_str}).encode()
+def _sb_insert(record, table_type):
+    payload = _json.dumps({
+        "id":         record["id"],
+        "name":       record["name"],
+        "amount":     record["amount"],
+        "event":      record["event"],
+        "relation":   record["relation"],
+        "date":       record["date"],
+        "table_type": table_type
+    }).encode()
     req = _req.Request(
-        f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",
+        f"{SUPABASE_URL}/rest/v1/records",
         data=payload,
-        headers={**_HEADERS, "Prefer": "return=representation"},
+        headers=_HEADERS,
+        method="POST"
+    )
+    try:
+        _req.urlopen(req)
+        print(f"✅ Supabase: נשמרה רשומה - {record['name']}")
+    except Exception as e:
+        print(f"❌ insert נכשל: {e}")
+        raise
+
+def _sb_update(record_id, field, value):
+    payload = _json.dumps({field: value}).encode()
+    req = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/records?id=eq.{record_id}",
+        data=payload,
+        headers=_HEADERS,
         method="PATCH"
     )
     try:
         _req.urlopen(req)
-        print("✅ Supabase: נשמר בהצלחה")
+        print(f"✅ Supabase: עודכנה רשומה {record_id}")
     except Exception as e:
-        print(f"❌ upsert נכשל: {e}")
+        print(f"❌ update נכשל: {e}")
         raise
 
-def _load_data():
+def _sb_delete(record_id):
+    req = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/records?id=eq.{record_id}",
+        headers=_HEADERS,
+        method="DELETE"
+    )
     try:
-        rows = _sb_get()
+        _req.urlopen(req)
+        print(f"✅ Supabase: נמחקה רשומה {record_id}")
+    except Exception as e:
+        print(f"❌ delete נכשל: {e}")
+        raise
+
+def _sb_delete_by_type(table_type):
+    req = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/records?table_type=eq.{table_type}",
+        headers=_HEADERS,
+        method="DELETE"
+    )
+    try:
+        _req.urlopen(req)
+        print(f"✅ Supabase: נמחקו כל רשומות {table_type}")
+    except Exception as e:
+        print(f"❌ delete_by_type נכשל: {e}")
+        raise
+
+def _sb_delete_all():
+    req = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/records?id=neq.00000000-0000-0000-0000-000000000000",
+        headers=_HEADERS,
+        method="DELETE"
+    )
+    try:
+        _req.urlopen(req)
+        print("✅ Supabase: נמחקו כל הרשומות")
+    except Exception as e:
+        print(f"❌ delete_all נכשל: {e}")
+        raise
+
+def _sb_get_all(table_type):
+    url = f"{SUPABASE_URL}/rest/v1/records?table_type=eq.{table_type}&select=*&order=date.desc"
+    r = _req.urlopen(_req.Request(url, headers=_HEADERS))
+    return _json.loads(r.read())
+
+def _sb_get_settings():
+    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"
+    try:
+        r = _req.urlopen(_req.Request(url, headers=_HEADERS))
+        rows = _json.loads(r.read())
         if rows:
-            print("✅ Supabase: נטענו נתונים בהצלחה")
             return _json.loads(rows[0]["value"])
-        print("⚠️ Supabase: טבלה ריקה, מתחיל מחדש")
-    except Exception as e:
-        print(f"❌ שגיאת טעינה מ-Supabase: {e}")
-    return {"received": [], "given": [], "custom_events": [], "custom_relations": []}
+    except:
+        pass
+    return {"custom_events": [], "custom_relations": []}
 
-def save():
+def _sb_save_settings(settings):
+    payload = _json.dumps({"value": _json.dumps(settings, ensure_ascii=False)}).encode()
+    req = _req.Request(
+        f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",
+        data=payload,
+        headers={**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
+        method="POST"
+    )
     try:
-        _sb_upsert(_json.dumps(data, ensure_ascii=False))
-    except Exception as e:
-        print(f"❌ save() נכשל: {e}")
+        _req.urlopen(req)
+    except:
+        pass
 
-data = _load_data()
+# ---------- DATA IN MEMORY ----------
+# רשומות לא נשמרות בזיכרון — הכל הולך ישירות ל-Supabase
+# רק הגדרות (custom events/relations) נשמרות בזיכרון + Supabase
+settings = _sb_get_settings()
+
+def get_data(table_type):
+    try:
+        return _sb_get_all(table_type)
+    except Exception as e:
+        print(f"❌ get_data נכשל: {e}")
+        return []
 
 # ---------- STATE ----------
 states = {}
@@ -96,41 +173,34 @@ BASE_AMOUNTS   = [450, 500, 600, 700, 800, 1000]
 BASE_RELATIONS = ["משפחה", "חברים מהשכונה", "מהצבא", "מהצד השני"]
 
 def get_events():
-    return list(dict.fromkeys(BASE_EVENTS + data.get("custom_events", [])))
+    return list(dict.fromkeys(BASE_EVENTS + settings.get("custom_events", [])))
 
 def get_relations():
-    return list(dict.fromkeys(BASE_RELATIONS + data.get("custom_relations", [])))
+    return list(dict.fromkeys(BASE_RELATIONS + settings.get("custom_relations", [])))
 
 def add_custom_event(ev):
-    if ev not in BASE_EVENTS and ev not in data.get("custom_events", []):
-        data.setdefault("custom_events", []).append(ev)
-        save()
+    if ev not in BASE_EVENTS and ev not in settings.get("custom_events", []):
+        settings.setdefault("custom_events", []).append(ev)
+        _sb_save_settings(settings)
 
 def add_custom_relation(rel):
-    if rel not in BASE_RELATIONS and rel not in data.get("custom_relations", []):
-        data.setdefault("custom_relations", []).append(rel)
-        save()
+    if rel not in BASE_RELATIONS and rel not in settings.get("custom_relations", []):
+        settings.setdefault("custom_relations", []).append(rel)
+        _sb_save_settings(settings)
 
 # ---------- RECORD HELPERS ----------
 def new_record(name, amount, event, relation, date):
     return {"id": str(uuid.uuid4()), "name": name, "amount": amount,
             "event": event, "relation": relation, "date": date}
 
-def get_record_by_id(record_id, table):
-    for r in data[table]:
+def get_record_by_id(record_id, records):
+    for r in records:
         if r["id"] == record_id or r["id"].startswith(record_id):
             return r
     return None
 
 def format_record(r):
     return f"{r['name']} - {r['amount']}₪ ({r['event']}, {r['relation']}, {r['date']})"
-
-def _apply_edit(rec_id, table, field, value):
-    for r in data[table]:
-        if r["id"] == rec_id:
-            r[field] = value
-            save()
-            return
 
 # ---------- KEYBOARDS ----------
 def menu_kb():
@@ -204,7 +274,7 @@ async def handle_excel(update):
     count = 0
     for i, row in df.iterrows():
         try:
-            name   = str(row.iloc[0]).strip()
+            name = str(row.iloc[0]).strip()
             if not name or name.lower() == "nan":
                 continue
             amount = int(float(str(row.iloc[1]).replace(",", "").strip()))
@@ -225,18 +295,21 @@ async def handle_excel(update):
             date = today()
         add_custom_event(event)
         add_custom_relation(relation)
-        data["received"].append(new_record(name, amount, event, relation, date))
-        count += 1
-    save()
+        rec = new_record(name, amount, event, relation, date)
+        try:
+            _sb_insert(rec, "received")
+            count += 1
+        except:
+            pass
     await update.message.reply_text(f"✅ נטענו {count} רשומות בהצלחה", reply_markup=menu_kb())
 
-def get_filtered_dates(table, relations_filter=None, event_filter=None):
-    results = data[table]
+def get_filtered_dates(table_type, relations_filter=None, event_filter=None):
+    records = get_data(table_type)
     if relations_filter:
-        results = [r for r in results if r["relation"] in relations_filter]
+        records = [r for r in records if r["relation"] in relations_filter]
     if event_filter:
-        results = [r for r in results if r["event"] == event_filter]
-    return sorted(set(r["date"] for r in results), reverse=True)
+        records = [r for r in records if r["event"] == event_filter]
+    return sorted(set(r["date"] for r in records), reverse=True)
 
 # ---------- SHOW RECORD ----------
 async def show_record_actions(send_fn, r):
@@ -285,10 +358,11 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d.startswith("view_rec_"):
         short_id = d[len("view_rec_"):]
-        table = state["ctx"].get("table", "received")
-        r = get_record_by_id(short_id, table)
+        records = state["ctx"].get("last_results", [])
+        r = get_record_by_id(short_id, records)
         if r:
             state["ctx"]["viewing_id"] = r["id"]
+            state["ctx"]["viewing_rec"] = r
             await show_record_actions(q.message.reply_text, r)
         return
 
@@ -313,12 +387,11 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d == "del_single_yes":
         rec_id = state["ctx"].get("viewing_id")
-        table  = state["ctx"].get("table", "received")
-        before = len(data[table])
-        data[table] = [r for r in data[table] if r["id"] != rec_id]
-        save()
-        deleted = before - len(data[table])
-        await q.message.reply_text(f"✅ נמחקה {deleted} רשומה", reply_markup=menu_kb())
+        try:
+            _sb_delete(rec_id)
+            await q.message.reply_text("✅ נמחקה רשומה", reply_markup=menu_kb())
+        except:
+            await q.message.reply_text("❌ שגיאה במחיקה", reply_markup=menu_kb())
         reset(user_id)
         return
 
@@ -369,7 +442,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text("הזן סכום:",
                 reply_markup=InlineKeyboardMarkup([nav_kb("edit_f_amount")]))
             return
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "amount", int(d.split("_")[1]))
+        _sb_update(state["ctx"]["viewing_id"], "amount", int(d.split("_")[1]))
         await q.message.reply_text("✅ סכום עודכן", reply_markup=menu_kb())
         reset(user_id)
         return
@@ -381,7 +454,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup([nav_kb("edit_f_event")]))
             return
         ev = d.split("_", 1)[1]
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "event", ev)
+        _sb_update(state["ctx"]["viewing_id"], "event", ev)
         await q.message.reply_text("✅ אירוע עודכן", reply_markup=menu_kb())
         reset(user_id)
         return
@@ -393,7 +466,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup([nav_kb("edit_f_relation")]))
             return
         rel = d.split("_", 1)[1]
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "relation", rel)
+        _sb_update(state["ctx"]["viewing_id"], "relation", rel)
         await q.message.reply_text("✅ קרבה עודכנה", reply_markup=menu_kb())
         reset(user_id)
         return
@@ -471,12 +544,14 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if state["mode"] == "date":
             rec = new_record(state["ctx"]["name"], state["ctx"]["amount"],
                              state["ctx"]["event"], state["ctx"]["relation"], date)
-            data[state["ctx"]["table"]].append(rec)
-            save()
-            await q.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
+            try:
+                _sb_insert(rec, state["ctx"]["table"])
+                await q.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
+            except:
+                await q.message.reply_text("❌ שגיאה בשמירה", reply_markup=menu_kb())
             reset(user_id)
         elif state["mode"] == "edit_date_input":
-            _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "date", date)
+            _sb_update(state["ctx"]["viewing_id"], "date", date)
             await q.message.reply_text("✅ תאריך עודכן", reply_markup=menu_kb())
             reset(user_id)
         return
@@ -489,7 +564,7 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*C* — סוג אירוע (לא חובה, ברירת מחדל: חתונה)\n"
             "*D* — סוג קרבה (לא חובה, ברירת מחדל: לא הוזן ערך)\n"
             "*E* — תאריך (לא חובה, פורמטים: DD/MM/YYYY או DD-MM-YYYY או YYYY-MM-DD, ריק = היום הנוכחי)\n\n"
-            "⚠️ שורת הכותרות (שם, סכום וכו') תדולג אוטומטית\n"
+            "⚠️ שורת הכותרות תדולג אוטומטית\n"
             "⚠️ רשומה ללא שם או סכום תדולג",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 תפריט", callback_data="main")]])
@@ -517,15 +592,16 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d.startswith("bulk_confirm_bulk_del_"):
         key = d.replace("bulk_confirm_bulk_del_", "")
-        if key == "rec":
-            count = len(data["received"]); data["received"] = []
-        elif key == "giv":
-            count = len(data["given"]); data["given"] = []
-        else:
-            count = len(data["received"]) + len(data["given"])
-            data["received"] = []; data["given"] = []
-        save()
-        await q.message.reply_text(f"✅ נמחקו {count} רשומות", reply_markup=menu_kb())
+        try:
+            if key == "rec":
+                _sb_delete_by_type("received")
+            elif key == "giv":
+                _sb_delete_by_type("given")
+            else:
+                _sb_delete_all()
+            await q.message.reply_text("✅ הנתונים נמחקו", reply_markup=menu_kb())
+        except:
+            await q.message.reply_text("❌ שגיאה במחיקה", reply_markup=menu_kb())
         reset(user_id)
         return
 
@@ -559,8 +635,8 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         state["ctx"]["fall_event"] = d.split("_", 1)[1]
         state["mode"] = "fall_date"
-        table = state["ctx"].get("table", "received")
-        fdates = get_filtered_dates(table,
+        table_type = state["ctx"].get("table", "received")
+        fdates = get_filtered_dates(table_type,
             relations_filter=state["ctx"].get("fall_relations") or None,
             event_filter=state["ctx"]["fall_event"])
         state["ctx"]["fall_available_dates"] = fdates
@@ -583,23 +659,23 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if d == "fdate_confirm":
-        table   = state["ctx"].get("table", "received")
-        rel_f   = state["ctx"].get("fall_relations") or None
-        ev_f    = [state["ctx"]["fall_event"]] if state["ctx"].get("fall_event") else None
-        date_f  = state["ctx"].get("fdate_selected") or None
+        table_type = state["ctx"].get("table", "received")
+        records = get_data(table_type)
+        rel_f  = state["ctx"].get("fall_relations") or None
+        ev_f   = state["ctx"].get("fall_event")
+        date_f = state["ctx"].get("fdate_selected") or None
 
-        results = data[table]
-        if rel_f:  results = [r for r in results if r["relation"] in rel_f]
-        if ev_f:   results = [r for r in results if r["event"]    in ev_f]
-        if date_f: results = [r for r in results if r["date"]     in date_f]
+        if rel_f:  records = [r for r in records if r["relation"] in rel_f]
+        if ev_f:   records = [r for r in records if r["event"] == ev_f]
+        if date_f: records = [r for r in records if r["date"] in date_f]
 
-        if results:
-            state["ctx"]["last_results"] = results
-            out = "\n\n".join([format_record(r) for r in results])
+        if records:
+            state["ctx"]["last_results"] = records
+            out = "\n\n".join([format_record(r) for r in records])
             await q.message.reply_text(
                 f"תוצאות מסוננות:\n\n{out}\n\nלחץ על שם לצפייה ועריכה:",
                 reply_markup=InlineKeyboardMarkup(
-                    [[InlineKeyboardButton(r["name"], callback_data=f"view_rec_{r['id'][:8]}")] for r in results]
+                    [[InlineKeyboardButton(r["name"], callback_data=f"view_rec_{r['id'][:8]}")] for r in records]
                     + [[InlineKeyboardButton("🏠 תפריט", callback_data="main")]]
                 )
             )
@@ -663,15 +739,18 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             date = today()
         rec = new_record(state["ctx"]["name"], state["ctx"]["amount"],
                          state["ctx"]["event"], state["ctx"]["relation"], date)
-        data[state["ctx"]["table"]].append(rec)
-        save()
-        await update.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
+        try:
+            _sb_insert(rec, state["ctx"]["table"])
+            await update.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
+        except:
+            await update.message.reply_text("❌ שגיאה בשמירה", reply_markup=menu_kb())
         reset(user_id)
         return
 
     if state["mode"] == "search_name":
-        table   = state["ctx"].get("table", "received")
-        results = [r for r in data[table] if text.lower() in r["name"].lower()]
+        table_type = state["ctx"].get("table", "received")
+        all_records = get_data(table_type)
+        results = [r for r in all_records if text.lower() in r["name"].lower()]
         if results:
             state["ctx"]["last_results"] = results
             out  = "\n\n".join([format_record(r) for r in results])
@@ -688,14 +767,14 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if state["mode"] == "edit_name_input":
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "name", text)
+        _sb_update(state["ctx"]["viewing_id"], "name", text)
         await update.message.reply_text("✅ שם עודכן", reply_markup=menu_kb())
         reset(user_id)
         return
 
     if state["mode"] == "edit_amount_custom":
         try:
-            _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "amount", int(text))
+            _sb_update(state["ctx"]["viewing_id"], "amount", int(text))
             await update.message.reply_text("✅ סכום עודכן", reply_markup=menu_kb())
             reset(user_id)
         except ValueError:
@@ -704,14 +783,14 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state["mode"] == "edit_event_custom":
         add_custom_event(text)
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "event", text)
+        _sb_update(state["ctx"]["viewing_id"], "event", text)
         await update.message.reply_text("✅ אירוע עודכן", reply_markup=menu_kb())
         reset(user_id)
         return
 
     if state["mode"] == "edit_relation_custom":
         add_custom_relation(text)
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "relation", text)
+        _sb_update(state["ctx"]["viewing_id"], "relation", text)
         await update.message.reply_text("✅ קרבה עודכנה", reply_markup=menu_kb())
         reset(user_id)
         return
@@ -725,7 +804,7 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
         else:
             date = today()
-        _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "date", date)
+        _sb_update(state["ctx"]["viewing_id"], "date", date)
         await update.message.reply_text("✅ תאריך עודכן", reply_markup=menu_kb())
         reset(user_id)
         return

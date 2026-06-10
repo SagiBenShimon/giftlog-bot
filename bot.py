@@ -110,28 +110,12 @@ def _sb_get_all(table_type):
     return _json.loads(r.read())
 
 def _sb_get_settings():
-    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"
-    try:
-        r = _req.urlopen(_req.Request(url, headers=_HEADERS))
-        rows = _json.loads(r.read())
-        if rows:
-            return _json.loads(rows[0]["value"])
-    except:
-        pass
+    # custom events/relations שמורים בזיכרון בלבד
     return {"custom_events": [], "custom_relations": []}
 
 def _sb_save_settings(settings):
-    payload = _json.dumps({"value": _json.dumps(settings, ensure_ascii=False)}).encode()
-    req = _req.Request(
-        f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",
-        data=payload,
-        headers={**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
-        method="POST"
-    )
-    try:
-        _req.urlopen(req)
-    except:
-        pass
+    # custom events/relations שמורים בזיכרון בלבד
+    pass
 
 # ---------- DATA IN MEMORY ----------
 # רשומות לא נשמרות בזיכרון — הכל הולך ישירות ל-Supabase
@@ -299,8 +283,8 @@ async def handle_excel(update):
         try:
             _sb_insert(rec, "received")
             count += 1
-        except:
-            pass
+        except Exception as e:
+            print(f"❌ שגיאה בהכנסת שורה {i}: {e}")
     await update.message.reply_text(f"✅ נטענו {count} רשומות בהצלחה", reply_markup=menu_kb())
 
 def get_filtered_dates(table_type, relations_filter=None, event_filter=None):
@@ -390,8 +374,9 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             _sb_delete(rec_id)
             await q.message.reply_text("✅ נמחקה רשומה", reply_markup=menu_kb())
-        except:
-            await q.message.reply_text("❌ שגיאה במחיקה", reply_markup=menu_kb())
+        except Exception as e:
+            print(f"❌ שגיאה במחיקה: {e}")
+            await q.message.reply_text(f"❌ שגיאה במחיקה: {e}", reply_markup=menu_kb())
         reset(user_id)
         return
 
@@ -547,8 +532,9 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 _sb_insert(rec, state["ctx"]["table"])
                 await q.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
-            except:
-                await q.message.reply_text("❌ שגיאה בשמירה", reply_markup=menu_kb())
+            except Exception as e:
+                print(f"❌ שגיאה בשמירה: {e}")
+                await q.message.reply_text(f"❌ שגיאה בשמירה: {e}", reply_markup=menu_kb())
             reset(user_id)
         elif state["mode"] == "edit_date_input":
             _sb_update(state["ctx"]["viewing_id"], "date", date)
@@ -600,8 +586,9 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 _sb_delete_all()
             await q.message.reply_text("✅ הנתונים נמחקו", reply_markup=menu_kb())
-        except:
-            await q.message.reply_text("❌ שגיאה במחיקה", reply_markup=menu_kb())
+        except Exception as e:
+            print(f"❌ שגיאה במחיקה: {e}")
+            await q.message.reply_text(f"❌ שגיאה במחיקה: {e}", reply_markup=menu_kb())
         reset(user_id)
         return
 
@@ -742,8 +729,9 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             _sb_insert(rec, state["ctx"]["table"])
             await update.message.reply_text("✅ נשמר בהצלחה", reply_markup=menu_kb())
-        except:
-            await update.message.reply_text("❌ שגיאה בשמירה", reply_markup=menu_kb())
+        except Exception as e:
+            print(f"❌ שגיאה בשמירה: {e}")
+            await update.message.reply_text(f"❌ שגיאה בשמירה: {e}", reply_markup=menu_kb())
         reset(user_id)
         return
 

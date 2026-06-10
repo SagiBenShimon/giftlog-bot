@@ -33,12 +33,13 @@ def _sb_get():
     return rows
 
 def _sb_upsert(value_str):
-    payload = _json.dumps({"ID": 1, "value": value_str}).encode()  # ✅ ID גדול
+    # שימוש ב-PATCH (UPDATE) על השורה הקיימת עם ID=1
+    payload = _json.dumps({"value": value_str}).encode()
     req = _req.Request(
-        f"{SUPABASE_URL}/rest/v1/botdata",
+        f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",
         data=payload,
-        headers={**_HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"},
-        method="POST"
+        headers={**_HEADERS, "Prefer": "return=representation"},
+        method="PATCH"
     )
     try:
         _req.urlopen(req)

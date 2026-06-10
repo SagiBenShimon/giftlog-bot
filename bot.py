@@ -27,13 +27,12 @@ _HEADERS = {
 }
 
 def _sb_get():
-    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"  # ✅ ID גדול
+    url = f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1&select=value"
     r = _req.urlopen(_req.Request(url, headers=_HEADERS))
     rows = _json.loads(r.read())
     return rows
 
 def _sb_upsert(value_str):
-    # שימוש ב-PATCH (UPDATE) על השורה הקיימת עם ID=1
     payload = _json.dumps({"value": value_str}).encode()
     req = _req.Request(
         f"{SUPABASE_URL}/rest/v1/botdata?ID=eq.1",
@@ -42,8 +41,9 @@ def _sb_upsert(value_str):
         method="PATCH"
     )
     try:
-        _req.urlopen(req)
-        print("✅ Supabase: נשמר בהצלחה")
+        response = _req.urlopen(req)
+        print(f"✅ Supabase status: {response.status}")
+        print(f"✅ Supabase response: {response.read().decode()}")
     except Exception as e:
         print(f"❌ upsert נכשל: {e}")
         if hasattr(e, 'read'):
@@ -70,7 +70,7 @@ def save():
 data = _load_data()
 
 # ---------- STATE ----------
-states = {}  # user_id -> {"mode": ..., "ctx": ...}
+states = {}
 
 def get_state(user_id):
     if user_id not in states:
@@ -84,13 +84,12 @@ def today():
     return datetime.now().strftime("%Y-%m-%d")
 
 def parse_date(text):
-    """Try multiple date formats and return YYYY-MM-DD"""
     for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(text.strip(), fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
-    return text  # return as-is if nothing matched
+    return text
 
 # ---------- DYNAMIC LISTS ----------
 BASE_EVENTS    = ["חתונה", "ברית", "יום הולדת"]
@@ -164,14 +163,12 @@ def events_kb(back_cb):
     return InlineKeyboardMarkup(rows)
 
 def relations_single_kb(back_cb):
-    """Single-select relations keyboard — for save flow"""
     rows = [[InlineKeyboardButton(r, callback_data=f"rel_{r}")] for r in get_relations()]
     rows.append([InlineKeyboardButton("אחר", callback_data="rel_other")])
     rows.append(nav_kb(back_cb))
     return InlineKeyboardMarkup(rows)
 
 def relations_multi_kb(back_cb, selected):
-    """Multi-select relations keyboard — for fallback search filter"""
     rows = []
     for r in get_relations():
         mark = "✔️ " if r in selected else "⬜ "
@@ -181,7 +178,6 @@ def relations_multi_kb(back_cb, selected):
     return InlineKeyboardMarkup(rows)
 
 def dates_multi_kb(back_cb, selected, filtered_dates=None):
-    """Multi-select dates keyboard — filtered by prior relation/event selections"""
     if filtered_dates is None:
         filtered_dates = []
     rows = []
@@ -193,7 +189,6 @@ def dates_multi_kb(back_cb, selected, filtered_dates=None):
     return InlineKeyboardMarkup(rows)
 
 def date_input_kb(back_cb):
-    """Keyboard for date input — type or press today"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 היום הנוכחי", callback_data="date_today")],
         nav_kb(back_cb),
@@ -237,7 +232,6 @@ async def handle_excel(update):
     await update.message.reply_text(f"✅ נטענו {count} רשומות בהצלחה", reply_markup=menu_kb())
 
 def get_filtered_dates(table, relations_filter=None, event_filter=None):
-    """Return sorted unique dates from records matching the given filters"""
     results = data[table]
     if relations_filter:
         results = [r for r in results if r["relation"] in relations_filter]
@@ -245,7 +239,7 @@ def get_filtered_dates(table, relations_filter=None, event_filter=None):
         results = [r for r in results if r["event"] == event_filter]
     return sorted(set(r["date"] for r in results), reverse=True)
 
-# ---------- SHOW RECORD (for view/edit/delete) ----------
+# ---------- SHOW RECORD ----------
 async def show_record_actions(send_fn, r):
     text = (f"📋 רשומה מלאה:\n"
             f"שם: {r['name']}\n"
@@ -269,15 +263,11 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     state = get_state(user_id)
 
-    # ── MAIN ──
     if d == "main":
         reset(user_id)
         await q.message.reply_text("בחר פעולה:", reply_markup=menu_kb())
         return
 
-    # ════════════════════════════════════════
-    # SEARCH
-    # ════════════════════════════════════════
     if d == "search":
         state["mode"] = "search_type"
         await q.message.reply_text("בחר סוג חיפוש:", reply_markup=InlineKeyboardMarkup([
@@ -294,7 +284,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([nav_kb("search")]))
         return
 
-    # view a record from search results
     if d.startswith("view_rec_"):
         short_id = d[len("view_rec_"):]
         table = state["ctx"].get("table", "received")
@@ -315,7 +304,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text(f"תוצאות:\n\n{out}", reply_markup=InlineKeyboardMarkup(rows))
         return
 
-    # single-record delete
     if d == "del_single_confirm":
         await q.message.reply_text("⚠️ האם אתה בטוח שברצונך למחוק את הרשומה?",
             reply_markup=InlineKeyboardMarkup([
@@ -335,7 +323,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # edit field chooser
     if d == "edit_rec":
         state["mode"] = "edit_field"
         rec_id = state["ctx"].get("viewing_id", "")
@@ -377,7 +364,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=date_input_kb("edit_rec"))
         return
 
-    # edit — amount pick
     if d.startswith("amt_") and state["mode"] == "edit_amount_pick":
         if d == "amt_other":
             state["mode"] = "edit_amount_custom"
@@ -389,7 +375,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # edit — event pick
     if d.startswith("ev_") and state["mode"] == "edit_event_pick":
         if d == "ev_other":
             state["mode"] = "edit_event_custom"
@@ -402,7 +387,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # edit — relation pick (single)
     if d.startswith("rel_") and state["mode"] == "edit_relation_pick":
         if d == "rel_other":
             state["mode"] = "edit_relation_custom"
@@ -415,9 +399,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # ════════════════════════════════════════
-    # SAVE FLOW  (rec / giv)
-    # ════════════════════════════════════════
     if d in ["rec", "giv"]:
         state["ctx"]["table"] = "received" if d == "rec" else "given"
         state["mode"] = "save_name"
@@ -452,7 +433,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("בחר קרבה:", reply_markup=relations_single_kb("save_back_relation"))
         return
 
-    # save — amount pick
     if d.startswith("amt_") and state["mode"] == "amount":
         if d == "amt_other":
             state["mode"] = "amount_custom"
@@ -464,7 +444,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("בחר אירוע:", reply_markup=events_kb("save_back_event"))
         return
 
-    # save — event pick
     if d.startswith("ev_") and state["mode"] == "event":
         if d == "ev_other":
             state["mode"] = "event_custom"
@@ -476,7 +455,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("בחר קרבה:", reply_markup=relations_single_kb("save_back_relation"))
         return
 
-    # save — relation pick (single)
     if d.startswith("rel_") and state["mode"] == "relation":
         if d == "rel_other":
             state["mode"] = "relation_custom"
@@ -489,7 +467,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=date_input_kb("save_back_date"))
         return
 
-    # ── DATE TODAY BUTTON ──
     if d == "date_today":
         date = today()
         if state["mode"] == "date":
@@ -505,9 +482,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reset(user_id)
         return
 
-    # ════════════════════════════════════════
-    # EXCEL
-    # ════════════════════════════════════════
     if d == "excel":
         await q.message.reply_text(
             "📊 שלח קובץ Excel עם העמודות הבאות:\n\n"
@@ -523,9 +497,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ════════════════════════════════════════
-    # DELETE (bulk)
-    # ════════════════════════════════════════
     if d == "delete":
         await q.message.reply_text("מה ברצונך למחוק?", reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🗑️ כמה קיבלת", callback_data="bulk_del_rec")],
@@ -559,9 +530,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # ════════════════════════════════════════
-    # FALLBACK FILTER (after name not found)
-    # ════════════════════════════════════════
     if d == "fallback_search":
         state["ctx"]["frel_selected"]  = []
         state["ctx"]["fdate_selected"] = []
@@ -570,14 +538,12 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=relations_multi_kb("search", []))
         return
 
-    # fallback — relation multi-select
     if d.startswith("frel_") and d != "frel_confirm":
         rel = d[len("frel_"):]
         sel = state["ctx"].setdefault("frel_selected", [])
         if rel in sel: sel.remove(rel)
         else:          sel.append(rel)
-        await q.message.edit_reply_markup(
-            reply_markup=relations_multi_kb("search", sel))
+        await q.message.edit_reply_markup(reply_markup=relations_multi_kb("search", sel))
         return
 
     if d == "frel_confirm":
@@ -586,7 +552,6 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("בחר אירוע:", reply_markup=events_kb("fallback_search"))
         return
 
-    # fallback — event pick
     if d.startswith("ev_") and state["mode"] == "fall_event":
         if d == "ev_other":
             state["mode"] = "fall_event_custom"
@@ -609,15 +574,13 @@ async def cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=dates_multi_kb("fallback_search", [], fdates))
         return
 
-    # fallback — date multi-select
     if d.startswith("fdate_") and d != "fdate_confirm":
         date_val = d[len("fdate_"):]
         sel = state["ctx"].setdefault("fdate_selected", [])
         if date_val in sel: sel.remove(date_val)
         else:               sel.append(date_val)
         fdates = state["ctx"].get("fall_available_dates", [])
-        await q.message.edit_reply_markup(
-            reply_markup=dates_multi_kb("fallback_search", sel, fdates))
+        await q.message.edit_reply_markup(reply_markup=dates_multi_kb("fallback_search", sel, fdates))
         return
 
     if d == "fdate_confirm":
@@ -659,7 +622,6 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = get_state(user_id)
     text = update.message.text.strip() if update.message.text else ""
 
-    # ── SAVE FLOW ──
     if state["mode"] == "save_name":
         state["ctx"]["name"] = text
         state["mode"] = "amount"
@@ -708,7 +670,6 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reset(user_id)
         return
 
-    # ── SEARCH BY NAME ──
     if state["mode"] == "search_name":
         table   = state["ctx"].get("table", "received")
         results = [r for r in data[table] if text.lower() in r["name"].lower()]
@@ -727,7 +688,6 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]))
         return
 
-    # ── EDIT INPUTS ──
     if state["mode"] == "edit_name_input":
         _apply_edit(state["ctx"]["viewing_id"], state["ctx"].get("table","received"), "name", text)
         await update.message.reply_text("✅ שם עודכן", reply_markup=menu_kb())
@@ -779,7 +739,6 @@ async def msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=dates_multi_kb("fallback_search", []))
         return
 
-    # ── DEFAULT ──
     await update.message.reply_text("בחר פעולה:", reply_markup=menu_kb())
 
 

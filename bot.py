@@ -41,13 +41,10 @@ def _sb_upsert(value_str):
         method="PATCH"
     )
     try:
-        response = _req.urlopen(req)
-        print(f"✅ Supabase status: {response.status}")
-        print(f"✅ Supabase response: {response.read().decode()}")
+        _req.urlopen(req)
+        print("✅ Supabase: נשמר בהצלחה")
     except Exception as e:
         print(f"❌ upsert נכשל: {e}")
-        if hasattr(e, 'read'):
-            print(f"❌ תגובת Supabase: {e.read().decode()}")
         raise
 
 def _load_data():
